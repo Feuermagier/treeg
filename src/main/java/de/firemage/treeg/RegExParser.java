@@ -2,7 +2,6 @@ package de.firemage.treeg;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 public class RegExParser {
     public static RegularExpression parse(String regex) throws InvalidRegExSyntaxException {
@@ -64,6 +63,15 @@ public class RegExParser {
 
     private static RegExNode parseEscaped(RegExLexer lexer) throws InvalidRegExSyntaxException {
         lexer.expect(RegExElementType.ESCAPE);
+
+        // Numbers
+        if (lexer.peekType() == RegExElementType.NUMBER) {
+            if (lexer.peek() != '0') {
+                // Named capture group ref
+                return new CaptureGroupReference(parseNumber(lexer));
+            }
+        }
+
         char value = lexer.consumeNext();
         return switch (value) {
             case 'd' -> new PredefinedCharacterClass(PredefinedCharacterClass.Type.DIGIT);
@@ -83,7 +91,7 @@ public class RegExParser {
             case 'Z' -> new BoundaryMatcher(BoundaryMatcher.Type.INPUT_END_BEFORE_TERMINATOR);
             case 'z' -> new BoundaryMatcher(BoundaryMatcher.Type.INPUT_END);
             case 'R' -> new BoundaryMatcher(BoundaryMatcher.Type.LINEBREAK);
-            case '(', ')', '[', ']', '{', '}', '.', '/', '\\' -> new Character(value, true);
+            case '(', ')', '[', ']', '{', '}', '.', '/', '\\', '+', '?', '*',  '|' -> new Character(value, true);
             default -> throw new InvalidRegExSyntaxException("Unknown escape sequence '\\" + value + "'");
         };
     }
@@ -210,7 +218,7 @@ public class RegExParser {
     }
 
     public static void main(String[] args) throws InvalidRegExSyntaxException {
-        String string = "[\\w -$]+";
+        String string = "<(FONT|font)([ ]([a-zA-Z]+)=(\"|')[^\"\\']+(\"|'))*[^>]+>([^<]+)(</FONT>|</font>)";
         RegularExpression regex = RegExParser.parse(string);
         System.out.println(regex.toTree());
         System.out.println("O: " + string);
