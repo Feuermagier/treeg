@@ -1,4 +1,6 @@
-package de.firemage.treeg;
+package de.firemage.treeg.ast;
+
+import de.firemage.treeg.TreePrinter;
 
 public record CharacterRange(char start, char end) implements CharacterClassEntry {
     @Override

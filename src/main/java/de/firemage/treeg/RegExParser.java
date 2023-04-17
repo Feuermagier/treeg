@@ -1,5 +1,19 @@
 package de.firemage.treeg;
 
+import de.firemage.treeg.ast.Alternative;
+import de.firemage.treeg.ast.BoundaryMatcher;
+import de.firemage.treeg.ast.CaptureGroupReference;
+import de.firemage.treeg.ast.Chain;
+import de.firemage.treeg.ast.CharacterClass;
+import de.firemage.treeg.ast.CharacterClassEntry;
+import de.firemage.treeg.ast.CharacterRange;
+import de.firemage.treeg.ast.Group;
+import de.firemage.treeg.ast.Lookaround;
+import de.firemage.treeg.ast.PredefinedCharacterClass;
+import de.firemage.treeg.ast.Quantifier;
+import de.firemage.treeg.ast.RegExCharacter;
+import de.firemage.treeg.ast.RegExNode;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -57,8 +71,8 @@ public class RegExParser {
         }
     }
 
-    private static Character parseCharacter(RegExLexer lexer) throws InvalidRegExSyntaxException {
-        return new Character(lexer.consumeNext(), false);
+    private static RegExCharacter parseCharacter(RegExLexer lexer) throws InvalidRegExSyntaxException {
+        return new RegExCharacter(lexer.consumeNext(), false);
     }
 
     private static RegExNode parseEscaped(RegExLexer lexer) throws InvalidRegExSyntaxException {
@@ -91,23 +105,98 @@ public class RegExParser {
             case 'Z' -> new BoundaryMatcher(BoundaryMatcher.Type.INPUT_END_BEFORE_TERMINATOR);
             case 'z' -> new BoundaryMatcher(BoundaryMatcher.Type.INPUT_END);
             case 'R' -> new BoundaryMatcher(BoundaryMatcher.Type.LINEBREAK);
-            case '(', ')', '[', ']', '{', '}', '.', '/', '\\', '+', '?', '*',  '|' -> new Character(value, true);
+            case '(', ')', '[', ']', '{', '}', '.', '/', '\\', '+', '?', '*', '|' -> new RegExCharacter(value, true);
             default -> throw new InvalidRegExSyntaxException("Unknown escape sequence '\\" + value + "'");
         };
     }
 
-    private static Group parseGroup(RegExLexer lexer) throws InvalidRegExSyntaxException {
+    private static RegExNode parseGroupLike(RegExLexer lexer) throws InvalidRegExSyntaxException {
         lexer.expect(RegExElementType.GROUP_START);
+        String name = null;
+        Group.Type type;
+        String flags = "";
+        if (lexer.peek() == '?') {
+            lexer.expect('?');
+
+            // Lookaround
+            Lookaround lookaround = tryParseLookaround(lexer);
+            if (lookaround != null) {
+                return lookaround;
+            }
+
+            if (lexer.peek() == ':') {
+                lexer.expect(':');
+                type = Group.Type.NON_CAPTURING;
+            } else if (lexer.peek() == '<') {
+                lexer.expect('<');
+                name = parseGroupName(lexer);
+                lexer.expect('>');
+                type = Group.Type.CAPTURING;
+            } else if (lexer.peek() == '>') {
+                lexer.expect('>');
+                type = Group.Type.INDEPENDENT_NON_CAPTURING;
+            } else {
+                flags = parseGroupFlags(lexer);
+                lexer.expect(':');
+                type = Group.Type.NON_CAPTURING;
+            }
+        } else {
+            type = Group.Type.CAPTURING;
+        }
         RegExNode child = parseAlternatives(lexer);
         lexer.expect(RegExElementType.GROUP_END);
-        return new Group(child);
+        return new Group(child, name, type, flags);
+    }
+
+    private static String parseGroupName(RegExLexer lexer) throws InvalidRegExSyntaxException {
+        StringBuilder name = new StringBuilder();
+        while (lexer.peekInRange('a', 'z') || lexer.peekInRange('A', 'Z') || lexer.peekInRange('0', '9')) {
+            name.append(lexer.consumeNext());
+        }
+        return name.toString();
+    }
+
+    private static String parseGroupFlags(RegExLexer lexer) throws InvalidRegExSyntaxException {
+        StringBuilder flags = new StringBuilder();
+        while (lexer.peekInRange('a', 'z') || lexer.peekInRange('A', 'Z') || lexer.peekInRange('0', '9') || lexer.peek() == '-') {
+            flags.append(lexer.consumeNext());
+        }
+        return flags.toString();
+    }
+
+    private static Lookaround tryParseLookaround(RegExLexer lexer) throws InvalidRegExSyntaxException {
+        Lookaround.Type type = null;
+        if (lexer.peek() == '=') {
+            lexer.consumeNext();
+            type = Lookaround.Type.LOOKAHEAD;
+        } else if (lexer.peek() == '!') {
+            lexer.consumeNext();
+            type = Lookaround.Type.NEGATIVE_LOOKAHEAD;
+        } else if (lexer.peek() == '<') {
+            lexer.consumeNext();
+            if (lexer.peek() == '=') {
+                lexer.consumeNext();
+                type = Lookaround.Type.LOOKBEHIND;
+            } else if (lexer.peek() == '!') {
+                lexer.consumeNext();
+                type = Lookaround.Type.NEGATIVE_LOOKBEHIND;
+            }
+        }
+
+        if (type != null) {
+            RegExNode child = parseAlternatives(lexer);
+            lexer.expect(RegExElementType.GROUP_END);
+            return new Lookaround(child, type);
+        } else {
+            return null;
+        }
     }
 
     private static RegExNode parseMaybeQuantified(RegExLexer lexer) throws InvalidRegExSyntaxException {
         RegExNode child = switch (lexer.peekType()) {
             case CHARACTER, NUMBER, RANGE -> parseCharacter(lexer);
             case ESCAPE -> parseEscaped(lexer);
-            case GROUP_START -> parseGroup(lexer);
+            case GROUP_START -> parseGroupLike(lexer);
             case CHARACTER_CLASS_START -> parseCharacterClass(lexer);
             case DOT -> {
                 lexer.consumeNext();
@@ -199,9 +288,9 @@ public class RegExParser {
                 entries.add(new CharacterRange(start, end));
             } else if (lexer.peekType() == RegExElementType.ESCAPE) {
                 lexer.consumeNext();
-                entries.add(new Character(lexer.consumeNext(), true));
+                entries.add(new RegExCharacter(lexer.consumeNext(), true));
             } else {
-                entries.add(new Character(lexer.consumeNext(), false));
+                entries.add(new RegExCharacter(lexer.consumeNext(), false));
             }
         }
 
@@ -219,9 +308,11 @@ public class RegExParser {
 
     public static void main(String[] args) throws InvalidRegExSyntaxException {
         String string = "<(FONT|font)([ ]([a-zA-Z]+)=(\"|')[^\"\\']+(\"|'))*[^>]+>([^<]+)(</FONT>|</font>)";
+        //String string = "abc.*";
         RegularExpression regex = RegExParser.parse(string);
         System.out.println(regex.toTree());
         System.out.println("O: " + string);
         System.out.println("R: " + regex.toRegEx());
+        System.out.println("Score: " + Score.scoreRegEx(regex));
     }
 }

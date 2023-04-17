@@ -1,4 +1,6 @@
-package de.firemage.treeg;
+package de.firemage.treeg.ast;
+
+import de.firemage.treeg.TreePrinter;
 
 public record Quantifier(RegExNode child, Type type, int min, int max) implements RegExNode {
     @Override

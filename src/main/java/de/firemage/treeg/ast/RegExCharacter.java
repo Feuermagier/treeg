@@ -1,6 +1,8 @@
-package de.firemage.treeg;
+package de.firemage.treeg.ast;
 
-public record Character(char content, boolean escaped) implements RegExNode, CharacterClassEntry {
+import de.firemage.treeg.TreePrinter;
+
+public record RegExCharacter(char content, boolean escaped) implements RegExNode, CharacterClassEntry {
     @Override
     public String toRegEx() {
         return (this.escaped ? "\\" : "") + this.content;

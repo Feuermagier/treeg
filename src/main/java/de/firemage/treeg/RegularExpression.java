@@ -1,5 +1,7 @@
 package de.firemage.treeg;
 
+import de.firemage.treeg.ast.RegExNode;
+
 public record RegularExpression(RegExNode root) {
     public String toRegEx() {
         return this.root.toRegEx();

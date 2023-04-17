@@ -24,6 +24,11 @@ public class RegExLexer {
         return this.peek(0);
     }
 
+    public boolean peekInRange(char min, char max) throws InvalidRegExSyntaxException {
+        char c = this.peek();
+        return c >= min && c <= max;
+    }
+
     public char peek(int offset) throws InvalidRegExSyntaxException {
         return this.read(this.index + offset);
     }
@@ -65,6 +70,13 @@ public class RegExLexer {
     public void expect(RegExElementType type) throws InvalidRegExSyntaxException {
         if (this.peekType() != type) {
             throw new InvalidRegExSyntaxException("Expected " + type + ", found '" + this.peek() + "'");
+        }
+        this.consumeNext();
+    }
+
+    public void expect(char c) throws InvalidRegExSyntaxException {
+        if (this.peek() != c) {
+            throw new InvalidRegExSyntaxException("Expected " + c + ", found '" + this.peek() + "'");
         }
         this.consumeNext();
     }

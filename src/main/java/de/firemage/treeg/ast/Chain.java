@@ -1,4 +1,6 @@
-package de.firemage.treeg;
+package de.firemage.treeg.ast;
+
+import de.firemage.treeg.TreePrinter;
 
 import java.util.List;
 import java.util.stream.Collectors;
